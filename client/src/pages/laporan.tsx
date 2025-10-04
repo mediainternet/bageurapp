@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { StatsCard } from "@/components/stats-card";
 import { Card } from "@/components/ui/card";
-import { ShoppingBag, DollarSign, TrendingUp, Package, Loader2 } from "lucide-react";
+import { ShoppingBag, DollarSign, TrendingUp, Package, Loader as Loader2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import type { Order, Topping, OrderItem } from "@shared/schema";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";

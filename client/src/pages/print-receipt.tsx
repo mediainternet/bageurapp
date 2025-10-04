@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useRoute } from "wouter";
 import { ReceiptPreview } from "@/components/receipt-preview";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Loader2, Bluetooth } from "lucide-react";
+import { ArrowLeft, Loader as Loader2, Bluetooth } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery } from "@tanstack/react-query";
 import type { Order, OrderItem, Topping } from "@shared/schema";
