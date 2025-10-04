@@ -10,33 +10,73 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { Plus, Pencil, Trash2, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-
-interface Topping {
-  id: string;
-  name: string;
-  price: number;
-}
-
-// TODO: Remove mock data - replace with API calls
-const mockToppings: Topping[] = [
-  { id: "1", name: "Ceker", price: 5000 },
-  { id: "2", name: "Siomay", price: 3000 },
-  { id: "3", name: "Batagor", price: 3000 },
-  { id: "4", name: "Bakso", price: 4000 },
-  { id: "5", name: "Mie", price: 2000 },
-  { id: "6", name: "Makaroni", price: 2000 },
-  { id: "7", name: "Telur", price: 3000 },
-  { id: "8", name: "Sosis", price: 4000 },
-];
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import type { Topping } from "@shared/schema";
 
 export default function ToppingManagementPage() {
-  const [toppings, setToppings] = useState(mockToppings);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingTopping, setEditingTopping] = useState<Topping | null>(null);
   const [formData, setFormData] = useState({ name: "", price: "" });
   const { toast } = useToast();
+
+  const { data: toppings = [], isLoading } = useQuery<Topping[]>({
+    queryKey: ["/api/toppings"],
+  });
+
+  const createMutation = useMutation({
+    mutationFn: (data: { name: string; price: number }) =>
+      apiRequest("/api/toppings", "POST", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/toppings"] });
+      toast({ title: "Topping berhasil ditambahkan" });
+      setIsDialogOpen(false);
+      setFormData({ name: "", price: "" });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Gagal menambahkan topping",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: { name: string; price: number } }) =>
+      apiRequest(`/api/toppings/${id}`, "PUT", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/toppings"] });
+      toast({ title: "Topping berhasil diupdate" });
+      setIsDialogOpen(false);
+      setEditingTopping(null);
+      setFormData({ name: "", price: "" });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Gagal mengupdate topping",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => apiRequest(`/api/toppings/${id}`, "DELETE"),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/toppings"] });
+      toast({ title: "Topping berhasil dihapus" });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Gagal menghapus topping",
+        variant: "destructive",
+      });
+    },
+  });
 
   const handleSubmit = () => {
     if (!formData.name || !formData.price) {
@@ -48,32 +88,16 @@ export default function ToppingManagementPage() {
       return;
     }
 
-    if (editingTopping) {
-      // TODO: Replace with actual API call to update topping
-      setToppings((prev) =>
-        prev.map((t) =>
-          t.id === editingTopping.id
-            ? { ...t, name: formData.name, price: parseInt(formData.price) }
-            : t
-        )
-      );
-      console.log("Updating topping:", editingTopping.id, formData);
-      toast({ title: "Topping berhasil diupdate" });
-    } else {
-      // TODO: Replace with actual API call to create topping
-      const newTopping = {
-        id: Date.now().toString(),
-        name: formData.name,
-        price: parseInt(formData.price),
-      };
-      setToppings((prev) => [...prev, newTopping]);
-      console.log("Creating topping:", formData);
-      toast({ title: "Topping berhasil ditambahkan" });
-    }
+    const data = {
+      name: formData.name,
+      price: parseInt(formData.price),
+    };
 
-    setIsDialogOpen(false);
-    setEditingTopping(null);
-    setFormData({ name: "", price: "" });
+    if (editingTopping) {
+      updateMutation.mutate({ id: editingTopping.id, data });
+    } else {
+      createMutation.mutate(data);
+    }
   };
 
   const handleEdit = (topping: Topping) => {
@@ -83,10 +107,7 @@ export default function ToppingManagementPage() {
   };
 
   const handleDelete = (id: string) => {
-    // TODO: Replace with actual API call to delete topping
-    setToppings((prev) => prev.filter((t) => t.id !== id));
-    console.log("Deleting topping:", id);
-    toast({ title: "Topping berhasil dihapus" });
+    deleteMutation.mutate(id);
   };
 
   const handleOpenDialog = () => {
@@ -94,6 +115,14 @@ export default function ToppingManagementPage() {
     setFormData({ name: "", price: "" });
     setIsDialogOpen(true);
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 lg:p-8 max-w-7xl mx-auto pb-20 lg:pb-8">
@@ -142,7 +171,11 @@ export default function ToppingManagementPage() {
                 onClick={handleSubmit}
                 className="w-full"
                 data-testid="button-save-topping"
+                disabled={createMutation.isPending || updateMutation.isPending}
               >
+                {(createMutation.isPending || updateMutation.isPending) && (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                )}
                 {editingTopping ? "Update" : "Simpan"}
               </Button>
             </div>
@@ -174,8 +207,13 @@ export default function ToppingManagementPage() {
                   size="icon"
                   onClick={() => handleDelete(topping.id)}
                   data-testid={`button-delete-${topping.id}`}
+                  disabled={deleteMutation.isPending}
                 >
-                  <Trash2 className="h-4 w-4 text-destructive" />
+                  {deleteMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin text-destructive" />
+                  ) : (
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  )}
                 </Button>
               </div>
             </div>
