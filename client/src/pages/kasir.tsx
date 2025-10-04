@@ -8,45 +8,55 @@ import { ToppingSelector } from "@/components/topping-selector";
 import { OrderHistory } from "@/components/order-history";
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-
-// TODO: Remove mock data - replace with API calls
-const mockToppings = [
-  { id: "1", name: "Ceker", price: 5000 },
-  { id: "2", name: "Siomay", price: 3000 },
-  { id: "3", name: "Batagor", price: 3000 },
-  { id: "4", name: "Bakso", price: 4000 },
-  { id: "5", name: "Mie", price: 2000 },
-  { id: "6", name: "Makaroni", price: 2000 },
-  { id: "7", name: "Telur", price: 3000 },
-  { id: "8", name: "Sosis", price: 4000 },
-];
-
-// TODO: Remove mock order history
-const mockOrderHistory = [
-  {
-    id: "1",
-    queueNumber: 15,
-    customerName: "Budi",
-    toppings: ["Ceker", "Siomay"],
-    total: 8000,
-    status: "done" as const,
-    createdAt: new Date(Date.now() - 600000),
-  },
-  {
-    id: "2",
-    queueNumber: 16,
-    toppings: ["Bakso", "Mie", "Telur"],
-    total: 9000,
-    status: "done" as const,
-    createdAt: new Date(Date.now() - 300000),
-  },
-];
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import type { Topping, Order } from "@shared/schema";
+import { Loader2 } from "lucide-react";
 
 export default function KasirPage() {
   const [customerName, setCustomerName] = useState("");
   const [selectedToppings, setSelectedToppings] = useState<string[]>([]);
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+
+  const { data: toppings = [], isLoading: isLoadingToppings } = useQuery<Topping[]>({
+    queryKey: ["/api/toppings"],
+  });
+
+  const { data: queueData } = useQuery<{ queueNumber: number }>({
+    queryKey: ["/api/queue-number"],
+  });
+
+  const todayOrders = useQuery<Order[]>({
+    queryKey: ["/api/orders", new Date().toISOString().split('T')[0]],
+    queryFn: async () => {
+      const today = new Date().toISOString().split('T')[0];
+      const response = await fetch(`/api/orders?date=${today}`);
+      if (!response.ok) throw new Error('Failed to fetch orders');
+      return response.json();
+    },
+  });
+
+  const createOrderMutation = useMutation({
+    mutationFn: (orderData: any) => apiRequest("/api/orders", "POST", orderData),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/queue-number"] });
+      toast({
+        title: "Order berhasil dibuat",
+        description: `Order untuk ${customerName || "Tanpa nama"} telah ditambahkan ke antrian`,
+      });
+      setCustomerName("");
+      setSelectedToppings([]);
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Gagal membuat order",
+        variant: "destructive",
+      });
+    },
+  });
 
   const handleToggleTopping = (id: string) => {
     setSelectedToppings((prev) =>
@@ -56,7 +66,7 @@ export default function KasirPage() {
 
   const calculateTotal = () => {
     return selectedToppings.reduce((sum, id) => {
-      const topping = mockToppings.find((t) => t.id === id);
+      const topping = toppings.find((t) => t.id === id);
       return sum + (topping?.price || 0);
     }, 0);
   };
@@ -71,21 +81,40 @@ export default function KasirPage() {
       return;
     }
 
-    // TODO: Replace with actual API call to create order
-    console.log("Creating order:", { customerName, selectedToppings });
+    const total = calculateTotal();
+    const queueNumber = queueData?.queueNumber || 1;
     
-    toast({
-      title: "Order berhasil dibuat",
-      description: `Order untuk ${customerName || "Tanpa nama"} telah ditambahkan ke antrian`,
-    });
+    const orderData = {
+      queueNumber,
+      customerName: customerName || null,
+      status: "pending",
+      total,
+      items: selectedToppings.map(toppingId => {
+        const topping = toppings.find(t => t.id === toppingId);
+        return {
+          toppingId,
+          qty: 1,
+          price: topping?.price || 0,
+        };
+      }),
+    };
 
-    setCustomerName("");
-    setSelectedToppings([]);
+    createOrderMutation.mutate(orderData);
   };
 
   const handleViewReceipt = (orderId: string) => {
     setLocation(`/print/${orderId}`);
   };
+
+  if (isLoadingToppings) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  const orderHistory = todayOrders.data?.filter(o => o.status === "done") || [];
 
   return (
     <div className="p-4 lg:p-8 max-w-7xl mx-auto pb-20 lg:pb-8">
@@ -118,7 +147,7 @@ export default function KasirPage() {
           <div>
             <h2 className="text-xl font-semibold mb-4">Pilih Topping</h2>
             <ToppingSelector
-              toppings={mockToppings}
+              toppings={toppings}
               selectedIds={selectedToppings}
               onToggle={handleToggleTopping}
             />
@@ -134,7 +163,7 @@ export default function KasirPage() {
             ) : (
               <div className="space-y-2">
                 {selectedToppings.map((id) => {
-                  const topping = mockToppings.find((t) => t.id === id);
+                  const topping = toppings.find((t) => t.id === id);
                   return (
                     <div key={id} className="flex justify-between text-sm">
                       <span>{topping?.name}</span>
@@ -158,9 +187,12 @@ export default function KasirPage() {
               <Button
                 onClick={handleSubmit}
                 className="w-full"
-                disabled={selectedToppings.length === 0}
+                disabled={selectedToppings.length === 0 || createOrderMutation.isPending}
                 data-testid="button-create-order"
               >
+                {createOrderMutation.isPending && (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                )}
                 Proses Order
               </Button>
             </div>
@@ -170,7 +202,13 @@ export default function KasirPage() {
         </TabsContent>
 
         <TabsContent value="history">
-          <OrderHistory orders={mockOrderHistory} onViewReceipt={handleViewReceipt} />
+          {todayOrders.isLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          ) : (
+            <OrderHistory orders={orderHistory as any} onViewReceipt={handleViewReceipt} />
+          )}
         </TabsContent>
       </Tabs>
     </div>
