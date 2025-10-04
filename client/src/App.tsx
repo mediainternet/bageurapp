@@ -8,19 +8,23 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { BottomNav } from "@/components/bottom-nav";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ThemeToggle } from "@/components/theme-toggle";
+import LoginPage from "@/pages/login";
 import KasirPage from "@/pages/kasir";
 import DapurPage from "@/pages/dapur";
 import LaporanPage from "@/pages/laporan";
 import ToppingManagementPage from "@/pages/topping-management";
+import PrintReceiptPage from "@/pages/print-receipt";
 import NotFound from "@/pages/not-found";
 
 function Router() {
   return (
     <Switch>
+      <Route path="/login" component={LoginPage} />
       <Route path="/" component={KasirPage} />
       <Route path="/dapur" component={DapurPage} />
       <Route path="/laporan" component={LaporanPage} />
       <Route path="/topping" component={ToppingManagementPage} />
+      <Route path="/print/:id" component={PrintReceiptPage} />
       <Route component={NotFound} />
     </Switch>
   );

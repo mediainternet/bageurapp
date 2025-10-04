@@ -1,10 +1,13 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { ToppingSelector } from "@/components/topping-selector";
+import { OrderHistory } from "@/components/order-history";
 import { useToast } from "@/hooks/use-toast";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 // TODO: Remove mock data - replace with API calls
 const mockToppings = [
@@ -18,9 +21,31 @@ const mockToppings = [
   { id: "8", name: "Sosis", price: 4000 },
 ];
 
+// TODO: Remove mock order history
+const mockOrderHistory = [
+  {
+    id: "1",
+    queueNumber: 15,
+    customerName: "Budi",
+    toppings: ["Ceker", "Siomay"],
+    total: 8000,
+    status: "done" as const,
+    createdAt: new Date(Date.now() - 600000),
+  },
+  {
+    id: "2",
+    queueNumber: 16,
+    toppings: ["Bakso", "Mie", "Telur"],
+    total: 9000,
+    status: "done" as const,
+    createdAt: new Date(Date.now() - 300000),
+  },
+];
+
 export default function KasirPage() {
   const [customerName, setCustomerName] = useState("");
   const [selectedToppings, setSelectedToppings] = useState<string[]>([]);
+  const [, setLocation] = useLocation();
   const { toast } = useToast();
 
   const handleToggleTopping = (id: string) => {
@@ -58,13 +83,24 @@ export default function KasirPage() {
     setSelectedToppings([]);
   };
 
+  const handleViewReceipt = (orderId: string) => {
+    setLocation(`/print/${orderId}`);
+  };
+
   return (
     <div className="p-4 lg:p-8 max-w-7xl mx-auto pb-20 lg:pb-8">
       <h1 className="text-3xl font-bold mb-6">Kasir</h1>
-      
-      <div className="grid lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-6">
-          <Card className="p-4">
+
+      <Tabs defaultValue="order" className="space-y-6">
+        <TabsList>
+          <TabsTrigger value="order" data-testid="tab-new-order">Order Baru</TabsTrigger>
+          <TabsTrigger value="history" data-testid="tab-order-history">Riwayat</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="order">
+          <div className="grid lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2 space-y-6">
+              <Card className="p-4">
             <div className="space-y-4">
               <div>
                 <Label htmlFor="customerName">Nama Pelanggan (Opsional)</Label>
@@ -87,9 +123,9 @@ export default function KasirPage() {
               onToggle={handleToggleTopping}
             />
           </div>
-        </div>
+            </div>
 
-        <div className="lg:sticky lg:top-4 h-fit">
+            <div className="lg:sticky lg:top-4 h-fit">
           <Card className="p-4 space-y-4">
             <h3 className="text-lg font-semibold">Ringkasan Order</h3>
             
@@ -129,8 +165,14 @@ export default function KasirPage() {
               </Button>
             </div>
           </Card>
-        </div>
-      </div>
+            </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="history">
+          <OrderHistory orders={mockOrderHistory} onViewReceipt={handleViewReceipt} />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
