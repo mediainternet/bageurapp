@@ -60,7 +60,8 @@ export default function DapurPage() {
     mutationFn: ({ id, status }: { id: string; status: string }) =>
       apiRequest(`/api/orders/${id}/status`, "PATCH", { status }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
+      const today = new Date().toISOString().split('T')[0];
+      queryClient.invalidateQueries({ queryKey: ["/api/orders", today] });
     },
   });
 

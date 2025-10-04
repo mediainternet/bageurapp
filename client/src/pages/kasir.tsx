@@ -40,7 +40,8 @@ export default function KasirPage() {
   const createOrderMutation = useMutation({
     mutationFn: (orderData: any) => apiRequest("/api/orders", "POST", orderData),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
+      const today = new Date().toISOString().split('T')[0];
+      queryClient.invalidateQueries({ queryKey: ["/api/orders", today] });
       queryClient.invalidateQueries({ queryKey: ["/api/queue-number"] });
       toast({
         title: "Order berhasil dibuat",
