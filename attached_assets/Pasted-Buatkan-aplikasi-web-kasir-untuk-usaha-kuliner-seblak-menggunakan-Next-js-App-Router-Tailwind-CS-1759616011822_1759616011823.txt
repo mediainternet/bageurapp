@@ -1,0 +1,43 @@
+Buatkan aplikasi web kasir untuk usaha kuliner seblak menggunakan Next.js (App Router) + Tailwind CSS + Supabase (atau Prisma + PostgreSQL jika lebih sesuai).
+
+🔹 Fitur utama:
+1. Manajemen topping (CRUD): contoh topping ceker, siomay, batagor, bakso, mie, makaroni, telur, dll.
+2. Integrasi Otentikasi: Gunakan Auth Supabase untuk mengelola login kasir.
+3. Order kasir:
+   - Jika Custom → pilih topping manual (checkbox)
+   - Hitung total harga otomatis
+   - Nomor antrian auto increment (#1, #2, dst)
+   - Antrian bisa nambat toping, pastikan antrian dan struk bisa di edit dengan catatan ada penambahan topping.
+4. Layar dapur:
+   - Tampilkan antrian berdasarkan nomor urut
+   - Status order: pending → in_progress → done
+   - Tombol update status
+5. Cetak struk:
+   - Nama warung Seblak Bageur
+   - Cetak struk bisa menghasilkan gambar (Support thermal print)
+   - Menampilkan nama, nomor antrian, daftar topping, total harga
+   - Bisa print ke **thermal printer Bluetooth** (gunakan Web Bluetooth API)
+   - Format struk sederhana (ESC/POS style)
+6. Laporan harian:
+   - Total order hari ini
+   - Total penjualan per topping & paket
+
+🔹 Teknologi tambahan:
+- **Responsive design** → Optimalkan dengan Tailwind (grid, flex, breakpoint `sm`, `md`, `lg`).
+- **PWA support** → Tambahkan manifest.json, service worker, offline caching.
+- **Bluetooth printing** → Gunakan Web Bluetooth API (navigator.bluetooth) untuk pairing thermal printer ESC/POS, lalu kirim data print.
+
+🔹 Struktur Database:
+- toppings (id, name, price)
+- packages (id, name, price)
+- package_toppings (package_id, topping_id)
+- orders (id, queue_no, customer_name, type, status, total, created_at)
+- order_items (id, order_id, topping_id, qty, price)
+
+🔹 UI halaman:
+- Kasir → form input order (paket/custom)
+- Dapur → daftar antrian + tombol update status
+- Laporan → grafik dan rekap harian
+- Struk → halaman siap cetak + tombol "Print via Bluetooth"
+
+Pastikan aplikasi bisa dijalankan di mobile browser (Android/iOS), bisa di-install sebagai PWA, dan bisa print struk langsung ke printer thermal Bluetooth.
