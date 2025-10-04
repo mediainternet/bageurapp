@@ -2,10 +2,11 @@ import { useState, useEffect } from "react";
 import { useRoute } from "wouter";
 import { ReceiptPreview } from "@/components/receipt-preview";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2, Bluetooth } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery } from "@tanstack/react-query";
 import type { Order, OrderItem, Topping } from "@shared/schema";
+import { bluetoothPrinter, isBluetoothSupported } from "@/lib/bluetooth-printer";
 
 interface ReceiptItem {
   name: string;
@@ -49,29 +50,50 @@ export default function PrintReceiptPage() {
   }, [orderData, toppings]);
 
   const handlePrint = async () => {
+    if (!orderData) return;
+
     setIsPrinting(true);
 
     try {
-      console.log("Printing receipt for order:", params?.id);
-      
-      if ('bluetooth' in navigator) {
-        console.log("Web Bluetooth is available");
-      }
-
-      setTimeout(() => {
+      if (!isBluetoothSupported()) {
         toast({
-          title: "Struk berhasil dicetak",
-          description: "Silakan ambil struk dari printer",
+          title: "Bluetooth tidak didukung",
+          description: "Browser ini tidak mendukung Web Bluetooth API",
+          variant: "destructive",
         });
         setIsPrinting(false);
-      }, 1500);
+        return;
+      }
+
+      if (!bluetoothPrinter.isConnected()) {
+        toast({
+          title: "Menghubungkan ke printer...",
+          description: "Pilih printer thermal dari daftar",
+        });
+        await bluetoothPrinter.connect();
+      }
+
+      await bluetoothPrinter.print({
+        storeName: "Seblak Bageur",
+        queueNumber: orderData.order.queueNumber,
+        customerName: orderData.order.customerName || undefined,
+        items: receiptItems,
+        total: orderData.order.total,
+        date: orderData.order.createdAt || new Date(),
+      });
+
+      toast({
+        title: "Struk berhasil dicetak",
+        description: "Silakan ambil struk dari printer",
+      });
     } catch (error) {
       console.error("Print error:", error);
       toast({
         title: "Gagal mencetak",
-        description: "Pastikan printer Bluetooth sudah terhubung",
+        description: error instanceof Error ? error.message : "Pastikan printer Bluetooth sudah terhubung",
         variant: "destructive",
       });
+    } finally {
       setIsPrinting(false);
     }
   };
@@ -116,8 +138,16 @@ export default function PrintReceiptPage() {
           onPrint={handlePrint}
         />
 
-        <div className="mt-6 text-center text-sm text-muted-foreground">
-          <p>Pastikan printer thermal Bluetooth sudah terpasang</p>
+        <div className="mt-6">
+          <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+            <Bluetooth className="h-4 w-4" />
+            <p>Pastikan printer thermal Bluetooth sudah terpasang</p>
+          </div>
+          {!isBluetoothSupported() && (
+            <p className="text-center text-xs text-amber-600 mt-2">
+              Browser ini tidak mendukung Web Bluetooth API. Gunakan Chrome atau Edge.
+            </p>
+          )}
         </div>
       </div>
     </div>

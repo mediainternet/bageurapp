@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/card";
 import { ShoppingBag, DollarSign, TrendingUp, Package, Loader2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import type { Order, Topping, OrderItem } from "@shared/schema";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
 
 export default function LaporanPage() {
   const [toppingSales, setToppingSales] = useState<Map<string, { count: number; revenue: number }>>(new Map());
@@ -110,33 +111,65 @@ export default function LaporanPage() {
         />
       </div>
 
-      <Card className="p-6">
-        <h2 className="text-xl font-semibold mb-4">Penjualan per Topping</h2>
-        <div className="space-y-4">
+      <div className="grid gap-6">
+        <Card className="p-6">
+          <h2 className="text-xl font-semibold mb-6">Grafik Penjualan Topping</h2>
           {toppingsSalesArray.length === 0 ? (
             <p className="text-center text-muted-foreground py-8">Belum ada penjualan hari ini</p>
           ) : (
-            toppingsSalesArray.map((item) => (
-              <div
-                key={item.id}
-                className="flex items-center justify-between p-4 rounded-lg bg-muted/50"
-              >
-                <div className="flex-1">
-                  <p className="font-medium">{item.name}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {item.count} porsi terjual
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className="font-semibold font-mono">
-                    Rp {item.revenue.toLocaleString("id-ID")}
-                  </p>
-                </div>
-              </div>
-            ))
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={toppingsSalesArray}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis
+                  dataKey="name"
+                  angle={-45}
+                  textAnchor="end"
+                  height={100}
+                  fontSize={12}
+                />
+                <YAxis />
+                <Tooltip
+                  formatter={(value: number) => `${value} porsi`}
+                  contentStyle={{ borderRadius: '8px' }}
+                />
+                <Bar dataKey="count" fill="hsl(var(--primary))" radius={[8, 8, 0, 0]}>
+                  {toppingsSalesArray.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={`hsl(${220 - index * 20}, 70%, 50%)`} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
           )}
-        </div>
-      </Card>
+        </Card>
+
+        <Card className="p-6">
+          <h2 className="text-xl font-semibold mb-4">Detail Penjualan per Topping</h2>
+          <div className="space-y-4">
+            {toppingsSalesArray.length === 0 ? (
+              <p className="text-center text-muted-foreground py-8">Belum ada penjualan hari ini</p>
+            ) : (
+              toppingsSalesArray.map((item) => (
+                <div
+                  key={item.id}
+                  className="flex items-center justify-between p-4 rounded-lg bg-muted/50"
+                >
+                  <div className="flex-1">
+                    <p className="font-medium">{item.name}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {item.count} porsi terjual
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-semibold font-mono">
+                      Rp {item.revenue.toLocaleString("id-ID")}
+                    </p>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </Card>
+      </div>
     </div>
   );
 }

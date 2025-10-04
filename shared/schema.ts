@@ -32,10 +32,40 @@ export const insertToppingSchema = createInsertSchema(toppings).omit({
 export type InsertTopping = z.infer<typeof insertToppingSchema>;
 export type Topping = typeof toppings.$inferSelect;
 
+export const packages = pgTable("packages", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  price: integer("price").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertPackageSchema = createInsertSchema(packages).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertPackage = z.infer<typeof insertPackageSchema>;
+export type Package = typeof packages.$inferSelect;
+
+export const packageToppings = pgTable("package_toppings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  packageId: varchar("package_id").notNull().references(() => packages.id, { onDelete: "cascade" }),
+  toppingId: varchar("topping_id").notNull().references(() => toppings.id, { onDelete: "cascade" }),
+});
+
+export const insertPackageToppingSchema = createInsertSchema(packageToppings).omit({
+  id: true,
+});
+
+export type InsertPackageTopping = z.infer<typeof insertPackageToppingSchema>;
+export type PackageTopping = typeof packageToppings.$inferSelect;
+
 export const orders = pgTable("orders", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   queueNumber: integer("queue_number").notNull(),
   customerName: text("customer_name"),
+  type: text("type").notNull().default("custom"),
+  packageId: varchar("package_id").references(() => packages.id),
   status: text("status").notNull().default("pending"),
   total: integer("total").notNull(),
   createdAt: timestamp("created_at").defaultNow(),

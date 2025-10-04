@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertToppingSchema, insertOrderSchema, insertOrderItemSchema } from "@shared/schema";
+import { insertToppingSchema, insertOrderSchema, insertOrderItemSchema, insertPackageSchema } from "@shared/schema";
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -123,6 +123,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.put("/api/orders/:id", async (req, res) => {
+    try {
+      const updateSchema = z.object({
+        customerName: z.string().optional(),
+        total: z.number().optional(),
+        items: z.array(insertOrderItemSchema.omit({ orderId: true, id: true })).optional(),
+      });
+      const validatedData = updateSchema.parse(req.body);
+      const { items, ...orderData } = validatedData;
+
+      const order = await storage.updateOrder(req.params.id, orderData, items as any);
+      if (!order) {
+        res.status(404).json({ error: "Order not found" });
+        return;
+      }
+      res.json(order);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: error.errors });
+      } else {
+        res.status(500).json({ error: "Failed to update order" });
+      }
+    }
+  });
+
   // Queue number API
   app.get("/api/queue-number", async (req, res) => {
     try {
@@ -131,6 +156,79 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ queueNumber });
     } catch (error) {
       res.status(500).json({ error: "Failed to get queue number" });
+    }
+  });
+
+  // Packages API
+  app.get("/api/packages", async (req, res) => {
+    try {
+      const packages = await storage.getPackages();
+      res.json(packages);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch packages" });
+    }
+  });
+
+  app.get("/api/packages/:id", async (req, res) => {
+    try {
+      const packageData = await storage.getPackageWithToppings(req.params.id);
+      if (!packageData) {
+        res.status(404).json({ error: "Package not found" });
+        return;
+      }
+      res.json(packageData);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch package" });
+    }
+  });
+
+  app.post("/api/packages", async (req, res) => {
+    try {
+      const packageSchema = insertPackageSchema.extend({
+        toppingIds: z.array(z.string()),
+      });
+      const validatedData = packageSchema.parse(req.body);
+      const { toppingIds, ...packageData } = validatedData;
+
+      const pkg = await storage.createPackage(packageData, toppingIds);
+      res.json(pkg);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: error.errors });
+      } else {
+        res.status(500).json({ error: "Failed to create package" });
+      }
+    }
+  });
+
+  app.put("/api/packages/:id", async (req, res) => {
+    try {
+      const validatedData = insertPackageSchema.partial().parse(req.body);
+      const pkg = await storage.updatePackage(req.params.id, validatedData);
+      if (!pkg) {
+        res.status(404).json({ error: "Package not found" });
+        return;
+      }
+      res.json(pkg);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: error.errors });
+      } else {
+        res.status(500).json({ error: "Failed to update package" });
+      }
+    }
+  });
+
+  app.delete("/api/packages/:id", async (req, res) => {
+    try {
+      const deleted = await storage.deletePackage(req.params.id);
+      if (!deleted) {
+        res.status(404).json({ error: "Package not found" });
+        return;
+      }
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete package" });
     }
   });
 

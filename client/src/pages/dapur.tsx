@@ -69,8 +69,36 @@ export default function DapurPage() {
     updateStatusMutation.mutate({ id, status: newStatus });
   };
 
+  const updateOrderMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: any }) =>
+      apiRequest(`/api/orders/${id}`, "PUT", data),
+    onSuccess: () => {
+      const today = new Date().toISOString().split('T')[0];
+      queryClient.invalidateQueries({ queryKey: ["/api/orders", today] });
+      setEditingOrder(null);
+    },
+  });
+
   const handleEditOrder = (orderId: string, data: { customerName?: string; toppingIds: string[] }) => {
-    console.log(`Order ${orderId} edit requested:`, data);
+    const items = data.toppingIds.map(toppingId => {
+      const topping = toppings.find(t => t.id === toppingId);
+      return {
+        toppingId,
+        qty: 1,
+        price: topping?.price || 0,
+      };
+    });
+
+    const total = items.reduce((sum, item) => sum + item.price, 0);
+
+    updateOrderMutation.mutate({
+      id: orderId,
+      data: {
+        customerName: data.customerName || null,
+        total,
+        items,
+      },
+    });
   };
 
   const getOrderToppings = (orderId: string): string[] => {
