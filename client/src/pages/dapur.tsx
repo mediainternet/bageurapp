@@ -1,105 +1,107 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { OrderCard } from "@/components/order-card";
 import { EditOrderDialog } from "@/components/edit-order-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import type { Order, Topping, OrderItem } from "@shared/schema";
+import { Loader2 } from "lucide-react";
 
 type OrderStatus = "pending" | "in_progress" | "done";
 
-interface Order {
-  id: string;
-  queueNumber: number;
-  customerName?: string;
+interface OrderWithToppings extends Order {
   toppings: string[];
   toppingIds: string[];
-  total: number;
-  status: OrderStatus;
 }
 
-// TODO: Remove mock data - replace with API calls and real-time updates
-const mockOrders: Order[] = [
-  {
-    id: "1",
-    queueNumber: 1,
-    customerName: "Budi",
-    toppings: ["Ceker", "Siomay", "Mie"],
-    toppingIds: ["1", "2", "5"],
-    total: 10000,
-    status: "pending",
-  },
-  {
-    id: "2",
-    queueNumber: 2,
-    customerName: "Siti",
-    toppings: ["Bakso", "Telur", "Makaroni"],
-    toppingIds: ["4", "7", "6"],
-    total: 9000,
-    status: "pending",
-  },
-  {
-    id: "3",
-    queueNumber: 3,
-    toppings: ["Ceker", "Batagor"],
-    toppingIds: ["1", "3"],
-    total: 8000,
-    status: "in_progress",
-  },
-  {
-    id: "4",
-    queueNumber: 4,
-    customerName: "Ahmad",
-    toppings: ["Siomay", "Mie", "Sosis"],
-    toppingIds: ["2", "5", "8"],
-    total: 9000,
-    status: "done",
-  },
-];
-
-const mockToppings = [
-  { id: "1", name: "Ceker", price: 5000 },
-  { id: "2", name: "Siomay", price: 3000 },
-  { id: "3", name: "Batagor", price: 3000 },
-  { id: "4", name: "Bakso", price: 4000 },
-  { id: "5", name: "Mie", price: 2000 },
-  { id: "6", name: "Makaroni", price: 2000 },
-  { id: "7", name: "Telur", price: 3000 },
-  { id: "8", name: "Sosis", price: 4000 },
-];
-
 export default function DapurPage() {
-  const [orders, setOrders] = useState(mockOrders);
-  const [editingOrder, setEditingOrder] = useState<Order | null>(null);
+  const [editingOrder, setEditingOrder] = useState<OrderWithToppings | null>(null);
+
+  const { data: toppings = [], isLoading: isLoadingToppings } = useQuery<Topping[]>({
+    queryKey: ["/api/toppings"],
+  });
+
+  const { data: orders = [], isLoading: isLoadingOrders, refetch } = useQuery<Order[]>({
+    queryKey: ["/api/orders", new Date().toISOString().split('T')[0]],
+    queryFn: async () => {
+      const today = new Date().toISOString().split('T')[0];
+      const response = await fetch(`/api/orders?date=${today}`);
+      if (!response.ok) throw new Error('Failed to fetch orders');
+      return response.json();
+    },
+    refetchInterval: 5000,
+  });
+
+  const [ordersWithItems, setOrdersWithItems] = useState<Map<string, OrderItem[]>>(new Map());
+
+  useEffect(() => {
+    const fetchOrderItems = async () => {
+      const itemsMap = new Map<string, OrderItem[]>();
+      for (const order of orders) {
+        try {
+          const response = await fetch(`/api/orders/${order.id}`);
+          if (response.ok) {
+            const data = await response.json();
+            itemsMap.set(order.id, data.items);
+          }
+        } catch (error) {
+          console.error(`Failed to fetch items for order ${order.id}`);
+        }
+      }
+      setOrdersWithItems(itemsMap);
+    };
+
+    if (orders.length > 0) {
+      fetchOrderItems();
+    }
+  }, [orders]);
+
+  const updateStatusMutation = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: string }) =>
+      apiRequest(`/api/orders/${id}/status`, "PATCH", { status }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
+    },
+  });
 
   const handleStatusChange = (id: string, newStatus: OrderStatus) => {
-    setOrders((prev) =>
-      prev.map((order) =>
-        order.id === id ? { ...order, status: newStatus } : order
-      )
-    );
-    // TODO: Replace with actual API call to update order status
-    console.log(`Order ${id} status changed to ${newStatus}`);
+    updateStatusMutation.mutate({ id, status: newStatus });
   };
 
   const handleEditOrder = (orderId: string, data: { customerName?: string; toppingIds: string[] }) => {
-    const toppingNames = data.toppingIds.map(id => mockToppings.find(t => t.id === id)?.name || "");
-    const total = data.toppingIds.reduce((sum, id) => {
-      const topping = mockToppings.find(t => t.id === id);
-      return sum + (topping?.price || 0);
-    }, 0);
-
-    setOrders((prev) =>
-      prev.map((order) =>
-        order.id === orderId
-          ? { ...order, customerName: data.customerName, toppingIds: data.toppingIds, toppings: toppingNames, total }
-          : order
-      )
-    );
-    // TODO: Replace with actual API call to update order
-    console.log(`Order ${orderId} updated:`, data);
+    console.log(`Order ${orderId} edit requested:`, data);
   };
 
-  const pendingOrders = orders.filter((o) => o.status === "pending");
-  const inProgressOrders = orders.filter((o) => o.status === "in_progress");
-  const doneOrders = orders.filter((o) => o.status === "done");
+  const getOrderToppings = (orderId: string): string[] => {
+    const items = ordersWithItems.get(orderId) || [];
+    return items.map(item => {
+      const topping = toppings.find(t => t.id === item.toppingId);
+      return topping?.name || "Unknown";
+    });
+  };
+
+  const getOrderToppingIds = (orderId: string): string[] => {
+    const items = ordersWithItems.get(orderId) || [];
+    return items.map(item => item.toppingId);
+  };
+
+  const ordersWithToppingData: OrderWithToppings[] = orders.map(order => ({
+    ...order,
+    toppings: getOrderToppings(order.id),
+    toppingIds: getOrderToppingIds(order.id),
+  }));
+
+  const pendingOrders = ordersWithToppingData.filter((o) => o.status === "pending");
+  const inProgressOrders = ordersWithToppingData.filter((o) => o.status === "in_progress");
+  const doneOrders = ordersWithToppingData.filter((o) => o.status === "done");
+
+  if (isLoadingOrders || isLoadingToppings) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 lg:p-8 max-w-7xl mx-auto pb-20 lg:pb-8">
@@ -109,14 +111,14 @@ export default function DapurPage() {
         open={!!editingOrder}
         onOpenChange={(open) => !open && setEditingOrder(null)}
         order={editingOrder}
-        toppings={mockToppings}
+        toppings={toppings as any}
         onSave={handleEditOrder}
       />
 
       <Tabs defaultValue="all" className="space-y-4">
         <TabsList>
           <TabsTrigger value="all" data-testid="tab-all-orders">
-            Semua ({orders.length})
+            Semua ({ordersWithToppingData.length})
           </TabsTrigger>
           <TabsTrigger value="pending" data-testid="tab-pending">
             Menunggu ({pendingOrders.length})
@@ -131,15 +133,15 @@ export default function DapurPage() {
 
         <TabsContent value="all" className="space-y-4">
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {orders.map((order) => (
+            {ordersWithToppingData.map((order) => (
               <OrderCard
                 key={order.id}
                 queueNumber={order.queueNumber}
-                customerName={order.customerName}
+                customerName={order.customerName || undefined}
                 toppings={order.toppings}
                 total={order.total}
-                status={order.status}
-                onStatusChange={(status) => handleStatusChange(order.id, status)}
+                status={order.status as any}
+                onStatusChange={(status) => handleStatusChange(order.id, status as OrderStatus)}
                 onEdit={() => setEditingOrder(order)}
               />
             ))}
@@ -152,11 +154,11 @@ export default function DapurPage() {
               <OrderCard
                 key={order.id}
                 queueNumber={order.queueNumber}
-                customerName={order.customerName}
+                customerName={order.customerName || undefined}
                 toppings={order.toppings}
                 total={order.total}
-                status={order.status}
-                onStatusChange={(status) => handleStatusChange(order.id, status)}
+                status={order.status as any}
+                onStatusChange={(status) => handleStatusChange(order.id, status as OrderStatus)}
                 onEdit={() => setEditingOrder(order)}
               />
             ))}
@@ -169,11 +171,11 @@ export default function DapurPage() {
               <OrderCard
                 key={order.id}
                 queueNumber={order.queueNumber}
-                customerName={order.customerName}
+                customerName={order.customerName || undefined}
                 toppings={order.toppings}
                 total={order.total}
-                status={order.status}
-                onStatusChange={(status) => handleStatusChange(order.id, status)}
+                status={order.status as any}
+                onStatusChange={(status) => handleStatusChange(order.id, status as OrderStatus)}
                 onEdit={() => setEditingOrder(order)}
               />
             ))}
@@ -186,10 +188,10 @@ export default function DapurPage() {
               <OrderCard
                 key={order.id}
                 queueNumber={order.queueNumber}
-                customerName={order.customerName}
+                customerName={order.customerName || undefined}
                 toppings={order.toppings}
                 total={order.total}
-                status={order.status}
+                status={order.status as any}
                 onEdit={() => setEditingOrder(order)}
               />
             ))}
